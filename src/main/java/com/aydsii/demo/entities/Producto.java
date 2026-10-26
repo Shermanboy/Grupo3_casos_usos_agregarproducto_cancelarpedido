@@ -62,4 +62,8 @@ public class Producto {
     public void setDescripcion(String descripcion) {
         this.descripcion = descripcion;
     }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
 }
