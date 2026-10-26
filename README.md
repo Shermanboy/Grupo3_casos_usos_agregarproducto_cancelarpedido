@@ -131,3 +131,64 @@ La configuración está en [log4j2-spring.xml](src/main/resources/log4j2-spring.
 A partir de acá, cada fork es un proyecto independiente: no se sincroniza con el original ni con los forks de los demás.
 
 Reemplazá `<tu-usuario>` y `<repositorio>` por los datos reales.
+
+## CU-01: Agregar producto al carrito
+
+Endpoint:
+
+```http
+POST /api/clientes/{idCliente}/carrito/productos
+Content-Type: application/json
+
+{
+  "idProducto": 1,
+  "cantidad": 2
+}
+```
+
+Respuesta exitosa (`200`):
+
+```json
+{
+  "exito": true,
+  "codigo": 200,
+  "mensaje": "Producto agregado al carrito.",
+  "carrito": {
+    "idCarrito": 1,
+    "idCliente": 1,
+    "detalles": [
+      {
+        "idProducto": 1,
+        "nombre": "Maceta reciclada",
+        "cantidad": 2,
+        "precioUnitario": 1500.00,
+        "subtotal": 3000.00
+      }
+    ],
+    "subtotal": 3000.00
+  }
+}
+```
+
+También se puede consultar el carrito con `GET /api/clientes/{idCliente}/carrito`.
+
+Códigos de respuesta:
+
+| Código | Situación |
+|---|---|
+| `200` | Producto agregado correctamente |
+| `400` | Cantidad inválida o datos incompletos |
+| `404` | Cliente o producto inexistente |
+| `409` | Stock insuficiente o producto sin precio |
+
+Datos mínimos para probar:
+
+```sql
+INSERT INTO clientes (nombre, apellido, email)
+VALUES ('Ana', 'Pérez', 'ana@test.com');
+
+INSERT INTO productos (nombre, descripcion, precio_unitario, stock_disponible)
+VALUES ('Maceta reciclada', 'Maceta de material recuperado', 1500.00, 10);
+```
+
+> El carrito no descuenta stock. La reserva y el descuento se realizan al crear el pedido, y se devuelven al cancelarlo (CU-02).
