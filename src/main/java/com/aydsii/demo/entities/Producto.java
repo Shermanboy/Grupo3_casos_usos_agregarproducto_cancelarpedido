@@ -21,12 +21,12 @@ public class Producto {
     public Producto() {
     }
 
-    // --- Método de tu Modelo de Dominio ---
+  
     public void sumarStock(int cantidad) {
         this.stockDisponible += cantidad;
     }
 
-    // Getters y Setters
+
     public Long getIdProducto() {
         return idProducto;
     }

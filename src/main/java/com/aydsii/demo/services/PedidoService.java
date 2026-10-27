@@ -27,7 +27,7 @@ public class PedidoService {
         if (pedidoOpt.isPresent()) {
             Pedido pedido = pedidoOpt.get();
             
-            // Acá le preguntamos a la entidad si es válido cancelarla (tu modelo de dominio)
+            // Acá le preguntamos a la clase si es válido cancelarla 
             if (pedido.puedeCancelarse()) {
                 pedido.cancelar(); // Cambia el estado a "Cancelado"
                 
