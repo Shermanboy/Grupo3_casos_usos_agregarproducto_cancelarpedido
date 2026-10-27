@@ -20,14 +20,14 @@ public class Pedido {
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL)
     private List<DetallePedido> detalles;
 
-    // Constructor vacío exigido por JPA
+    // Constructor 
     public Pedido() {}
 
-    // --- Métodos de tu Modelo de Dominio ---
+   
 
-    public boolean puedeCancelarse() {
-        return this.estado.equals("Pendiente") || this.estado.equals("Aceptado");
-    }
+   public boolean puedeCancelarse() {
+    return this.estado.equalsIgnoreCase("Pendiente") || this.estado.equalsIgnoreCase("Aceptado");
+}
 
     public void cancelar() {
         if (puedeCancelarse()) {
