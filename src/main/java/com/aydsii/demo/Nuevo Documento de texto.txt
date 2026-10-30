@@ -1,0 +1,670 @@
+package com.aydsii.demo.dtos;
+
+public record AgregarProductoRequest(Long idProducto, Integer cantidad) {
+}
+
+
+package com.aydsii.demo.dtos;
+
+import com.aydsii.demo.entities.Carrito;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+public record CarritoResponse(
+        Long idCarrito,
+        Long idCliente,
+        List<DetalleCarritoResponse> detalles,
+        BigDecimal subtotal
+) {
+
+    public static CarritoResponse from(Carrito carrito) {
+        return new CarritoResponse(
+                carrito.getIdCarrito(),
+                carrito.getCliente() == null ? null : carrito.getCliente().getIdCliente(),
+                carrito.getDetalles().stream()
+                        .map(DetalleCarritoResponse::from)
+                        .toList(),
+                carrito.calcularSubtotal()
+        );
+    }
+}
+
+package com.aydsii.demo.dtos;
+
+import com.aydsii.demo.entities.DetalleCarrito;
+
+import java.math.BigDecimal;
+
+public record DetalleCarritoResponse(
+        Long idProducto,
+        String nombre,
+        Integer cantidad,
+        BigDecimal precioUnitario,
+        BigDecimal subtotal
+) {
+
+    public static DetalleCarritoResponse from(DetalleCarrito detalle) {
+        return new DetalleCarritoResponse(
+                detalle.getProducto().getIdProducto(),
+                detalle.getProducto().getNombre(),
+                detalle.getCantidad(),
+                detalle.getPrecioUnitario(),
+                detalle.getSubtotal()
+        );
+    }
+}
+package com.aydsii.demo.dtos;
+
+public record ResultadoAgregarProducto(
+        boolean exito,
+        int codigo,
+        String mensaje,
+        CarritoResponse carrito
+) {
+
+    public static ResultadoAgregarProducto ok(String mensaje, CarritoResponse carrito) {
+        return new ResultadoAgregarProducto(true, 200, mensaje, carrito);
+    }
+
+    public static ResultadoAgregarProducto error(String mensaje) {
+        return new ResultadoAgregarProducto(false, 400, mensaje, null);
+    }
+
+    public static ResultadoAgregarProducto noEncontrado(String mensaje) {
+        return new ResultadoAgregarProducto(false, 404, mensaje, null);
+    }
+
+    public static ResultadoAgregarProducto conflicto(String mensaje) {
+        return new ResultadoAgregarProducto(false, 409, mensaje, null);
+    }
+}
+
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+@Entity
+@Table(name = "carritos")
+public class Carrito {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idCarrito;
+
+    @OneToOne(optional = false)
+    @JoinColumn(name = "cliente_id", nullable = false, unique = true)
+    private Cliente cliente;
+
+    @OneToMany(mappedBy = "carrito", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DetalleCarrito> detalles = new ArrayList<>();
+
+    public Carrito() {
+    }
+
+    public Carrito(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    /**
+     * Agrega un producto al carrito. Si el producto ya existe, acumula la cantidad.
+     *
+     * @return true si se agregó; false si la cantidad es inválida o no hay stock.
+     */
+    public boolean agregarProducto(Producto producto, int cantidad) {
+        if (producto == null || cantidad <= 0) {
+            return false;
+        }
+
+        DetalleCarrito detalle = buscarDetalle(producto);
+        int cantidadTotal = cantidad + (detalle == null ? 0 : detalle.getCantidad());
+
+        if (producto.consultarDisponibilidad() < cantidadTotal) {
+            return false;
+        }
+
+        if (detalle == null) {
+            detalle = new DetalleCarrito(this, producto, cantidad);
+            detalles.add(detalle);
+        } else {
+            detalle.incrementarCantidad(cantidad);
+            detalle.recalcularSubtotal();
+        }
+
+        return true;
+    }
+
+    public int cantidadDe(Producto producto) {
+        DetalleCarrito detalle = buscarDetalle(producto);
+        return detalle == null ? 0 : detalle.getCantidad();
+    }
+
+    public BigDecimal calcularSubtotal() {
+        return detalles.stream()
+                .map(DetalleCarrito::getSubtotal)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private DetalleCarrito buscarDetalle(Producto producto) {
+        return detalles.stream()
+                .filter(detalle -> mismoProducto(detalle.getProducto(), producto))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean mismoProducto(Producto primero, Producto segundo) {
+        if (primero == null || segundo == null) {
+            return false;
+        }
+        if (primero.getIdProducto() != null && segundo.getIdProducto() != null) {
+            return primero.getIdProducto().equals(segundo.getIdProducto());
+        }
+        return primero == segundo;
+    }
+
+    public Long getIdCarrito() {
+        return idCarrito;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public List<DetalleCarrito> getDetalles() {
+        return detalles;
+    }
+}
+
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "clientes")
+public class Cliente {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idCliente;
+
+    @Column(nullable = false)
+    private String nombre;
+
+    @Column(nullable = false)
+    private String apellido;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @OneToOne(mappedBy = "cliente", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Carrito carrito;
+
+    public Cliente() {
+    }
+
+    public void asignarCarrito(Carrito carrito) {
+        this.carrito = carrito;
+        if (carrito != null) {
+            carrito.setCliente(this);
+        }
+    }
+
+    public Long getIdCliente() {
+        return idCliente;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getApellido() {
+        return apellido;
+    }
+
+    public void setApellido(String apellido) {
+        this.apellido = apellido;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public Carrito getCarrito() {
+        return carrito;
+    }
+}
+
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+@Entity
+@Table(
+        name = "detalles_carrito",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_detalle_carrito_producto",
+                columnNames = {"carrito_id", "producto_id"}
+        )
+)
+public class DetalleCarrito {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idDetalleCarrito;
+
+    @Column(nullable = false)
+    private Integer cantidad;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal precioUnitario;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal subtotal;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "carrito_id", nullable = false)
+    private Carrito carrito;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "producto_id", nullable = false)
+    private Producto producto;
+
+    public DetalleCarrito() {
+    }
+
+    public DetalleCarrito(Carrito carrito, Producto producto, int cantidad) {
+        this.carrito = carrito;
+        this.producto = producto;
+        this.cantidad = cantidad;
+        this.precioUnitario = producto.getPrecioUnitario();
+        recalcularSubtotal();
+    }
+
+    public BigDecimal calcularSubtotal() {
+        if (precioUnitario == null || cantidad == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return precioUnitario
+                .multiply(BigDecimal.valueOf(cantidad))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void recalcularSubtotal() {
+        this.subtotal = calcularSubtotal();
+    }
+
+    public void incrementarCantidad(int cantidad) {
+        this.cantidad = (this.cantidad == null ? 0 : this.cantidad) + cantidad;
+    }
+
+    public Long getIdDetalleCarrito() {
+        return idDetalleCarrito;
+    }
+
+    public Integer getCantidad() {
+        return cantidad;
+    }
+
+    public BigDecimal getPrecioUnitario() {
+        return precioUnitario;
+    }
+
+    public BigDecimal getSubtotal() {
+        return subtotal;
+    }
+
+    public Carrito getCarrito() {
+        return carrito;
+    }
+
+    public Producto getProducto() {
+        return producto;
+    }
+}
+
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "detalles_pedido")
+public class DetallePedido {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idDetallePedido;
+
+    private Integer cantidad;
+    private Double precioUnitario;
+    private Double subtotal;
+
+    @ManyToOne
+    @JoinColumn(name = "pedido_id")
+    private Pedido pedido;
+
+    @ManyToOne
+    @JoinColumn(name = "producto_id")
+    private Producto producto;
+
+    public DetallePedido() {}
+
+    public Long getIdDetallePedido() { return idDetallePedido; }
+    public Integer getCantidad() { return cantidad; }
+    public void setCantidad(Integer cantidad) { this.cantidad = cantidad; }
+    public Producto getProducto() { return producto; }
+    public void setProducto(Producto producto) { this.producto = producto; }
+    public Pedido getPedido() { return pedido; }
+    public void setPedido(Pedido pedido) { this.pedido = pedido; }
+}
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+import java.util.Date;
+import java.util.List;
+
+@Entity
+@Table(name = "pedidos")
+public class Pedido {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idPedido;
+
+    private String estado; // "Pendiente", "Aceptado", "Cancelado"
+    private Date fechaCreacion;
+    private Double montoTotal;
+
+    // Relación de composición: Un pedido tiene muchos detalles
+    @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL)
+    private List<DetallePedido> detalles;
+
+    // Constructor 
+    public Pedido() {}
+
+   
+
+   public boolean puedeCancelarse() {
+    return this.estado.equalsIgnoreCase("Pendiente") || this.estado.equalsIgnoreCase("Aceptado");
+}
+
+    public void cancelar() {
+        if (puedeCancelarse()) {
+            this.estado = "Cancelado";
+        }
+    }
+
+    // Getters y Setters
+    public Long getIdPedido() { return idPedido; }
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+    public List<DetallePedido> getDetalles() { return detalles; }
+}
+package com.aydsii.demo.entities;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Entity
+@Data
+@Table(name = "productos")
+public class Producto {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long idProducto;
+    private String descripcion;
+    private BigDecimal precioUnitario;
+    private String nombre;
+    private Integer stockDisponible;
+
+    public Producto() {
+    }
+
+    // --- Método de tu Modelo de Dominio ---
+    public void sumarStock(int cantidad) {
+        this.stockDisponible += cantidad;
+    }
+
+    // Getters y Setters
+    public Long getIdProducto() {
+        return idProducto;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public Integer getStockDisponible() {
+        return stockDisponible;
+    }
+
+    public void setStockDisponible(Integer stockDisponible) {
+        this.stockDisponible = stockDisponible;
+    }
+
+    public int consultarDisponibilidad() {
+        return this.stockDisponible == null ? 0 : this.stockDisponible;
+    }
+
+    public void setPrecioUnitario(BigDecimal precioUnitario) {
+        this.precioUnitario = precioUnitario;
+    }
+
+    public BigDecimal getPrecioUnitario() {
+        return precioUnitario;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+}
+package com.aydsii.demo.repositories;
+
+import com.aydsii.demo.entities.Carrito;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface CarritoRepository extends JpaRepository<Carrito, Long> {
+
+    Optional<Carrito> findByCliente_IdCliente(Long idCliente);
+}
+
+package com.aydsii.demo.repositories;
+
+import com.aydsii.demo.entities.Cliente;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ClienteRepository extends JpaRepository<Cliente, Long> {
+}
+
+package com.aydsii.demo.repositories;
+
+import com.aydsii.demo.entities.Pedido;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface PedidoRepository extends JpaRepository<Pedido, Long> {
+}
+package com.aydsii.demo.repositories;
+
+import com.aydsii.demo.entities.Producto;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ProductoRepository extends JpaRepository<Producto, Long> {
+}
+package com.aydsii.demo.services;
+
+import com.aydsii.demo.dtos.CarritoResponse;
+import com.aydsii.demo.dtos.ResultadoAgregarProducto;
+import com.aydsii.demo.entities.Carrito;
+import com.aydsii.demo.entities.Cliente;
+import com.aydsii.demo.entities.Producto;
+import com.aydsii.demo.repositories.CarritoRepository;
+import com.aydsii.demo.repositories.ClienteRepository;
+import com.aydsii.demo.repositories.ProductoRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+
+@Service
+public class CarritoService {
+
+    private final ClienteRepository clienteRepository;
+    private final ProductoRepository productoRepository;
+    private final CarritoRepository carritoRepository;
+
+    public CarritoService(ClienteRepository clienteRepository,
+                          ProductoRepository productoRepository,
+                          CarritoRepository carritoRepository) {
+        this.clienteRepository = clienteRepository;
+        this.productoRepository = productoRepository;
+        this.carritoRepository = carritoRepository;
+    }
+
+    @Transactional
+    public ResultadoAgregarProducto agregarProducto(Long idCliente, Long idProducto, int cantidad) {
+        if (idCliente == null || idProducto == null) {
+            return ResultadoAgregarProducto.error("El cliente y el producto son obligatorios.");
+        }
+
+        if (cantidad <= 0) {
+            return ResultadoAgregarProducto.error("La cantidad debe ser mayor a cero.");
+        }
+
+        Optional<Cliente> clienteOpt = clienteRepository.findById(idCliente);
+        if (clienteOpt.isEmpty()) {
+            return ResultadoAgregarProducto.noEncontrado("No existe el cliente con id " + idCliente + ".");
+        }
+
+        Optional<Producto> productoOpt = productoRepository.findById(idProducto);
+        if (productoOpt.isEmpty()) {
+            return ResultadoAgregarProducto.noEncontrado("No existe el producto con id " + idProducto + ".");
+        }
+
+        Producto producto = productoOpt.get();
+        if (producto.getPrecioUnitario() == null
+                || producto.getPrecioUnitario().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResultadoAgregarProducto.conflicto("El producto no tiene un precio válido.");
+        }
+
+        Cliente cliente = clienteOpt.get();
+        Carrito carrito = carritoRepository.findByCliente_IdCliente(idCliente)
+                .orElseGet(() -> {
+                    Carrito nuevo = new Carrito();
+                    cliente.asignarCarrito(nuevo);
+                    return nuevo;
+                });
+
+        if (!carrito.agregarProducto(producto, cantidad)) {
+            int yaEnCarrito = carrito.cantidadDe(producto);
+            int maximo = Math.max(0, producto.consultarDisponibilidad() - yaEnCarrito);
+            return ResultadoAgregarProducto.conflicto(
+                    "Stock insuficiente. Podés agregar hasta " + maximo + " unidad/es más."
+            );
+        }
+
+        Carrito guardado = carritoRepository.save(carrito);
+        return ResultadoAgregarProducto.ok(
+                "Producto agregado al carrito.",
+                CarritoResponse.from(guardado)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public CarritoResponse obtenerCarrito(Long idCliente) {
+        return carritoRepository.findByCliente_IdCliente(idCliente)
+                .map(CarritoResponse::from)
+                .orElse(null);
+    }
+}
+
+package com.aydsii.demo.services;
+
+import com.aydsii.demo.entities.DetallePedido;
+import com.aydsii.demo.entities.Pedido;
+import com.aydsii.demo.entities.Producto;
+import com.aydsii.demo.repositories.PedidoRepository;
+import com.aydsii.demo.repositories.ProductoRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
+
+@Service
+public class PedidoService {
+
+    @Autowired
+    private PedidoRepository pedidoRepository;
+    
+    @Autowired
+    private ProductoRepository productoRepository;
+
+    @Transactional // Garantiza que si algo falla, no se guarde nada a medias
+    public boolean cancelarPedido(Long idPedido) {
+        Optional<Pedido> pedidoOpt = pedidoRepository.findById(idPedido);
+        
+        if (pedidoOpt.isPresent()) {
+            Pedido pedido = pedidoOpt.get();
+            
+            // Acá le preguntamos a la entidad si es válido cancelarla (tu modelo de dominio)
+            if (pedido.puedeCancelarse()) {
+                pedido.cancelar(); // Cambia el estado a "Cancelado"
+                
+                // Recorremos los detalles para devolver el stock al inventario
+                for (DetallePedido detalle : pedido.getDetalles()) {
+                    Producto producto = detalle.getProducto();
+                    producto.sumarStock(detalle.getCantidad());
+                    productoRepository.save(producto); // Actualizamos el stock en la DB
+                }
+                
+                pedidoRepository.save(pedido); // Actualizamos el estado del pedido en la DB
+                return true;
+            }
+        }
+        return false; // Retorna falso si no se puede cancelar o si no existe
+    }
+}

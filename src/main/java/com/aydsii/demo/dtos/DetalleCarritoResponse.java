@@ -12,7 +12,7 @@ public record DetalleCarritoResponse(
         BigDecimal subtotal
 ) {
 
-    public static DetalleCarritoResponse from(DetalleCarrito detalle) {
+    public static DetalleCarritoResponse construirRespuesta(DetalleCarrito detalle) {
         return new DetalleCarritoResponse(
                 detalle.getProducto().getIdProducto(),
                 detalle.getProducto().getNombre(),

@@ -1,5 +1,11 @@
 package com.aydsii.demo.services;
 
+import java.math.BigDecimal;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.aydsii.demo.dtos.CarritoResponse;
 import com.aydsii.demo.dtos.ResultadoAgregarProducto;
 import com.aydsii.demo.entities.Carrito;
@@ -8,11 +14,6 @@ import com.aydsii.demo.entities.Producto;
 import com.aydsii.demo.repositories.CarritoRepository;
 import com.aydsii.demo.repositories.ClienteRepository;
 import com.aydsii.demo.repositories.ProductoRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.Optional;
 
 @Service
 public class CarritoService {
@@ -74,14 +75,14 @@ public class CarritoService {
         Carrito guardado = carritoRepository.save(carrito);
         return ResultadoAgregarProducto.ok(
                 "Producto agregado al carrito.",
-                CarritoResponse.from(guardado)
+                CarritoResponse.construirRespuesta(guardado)
         );
     }
 
     @Transactional(readOnly = true)
     public CarritoResponse obtenerCarrito(Long idCliente) {
         return carritoRepository.findByCliente_IdCliente(idCliente)
-                .map(CarritoResponse::from)
+                .map(CarritoResponse::construirRespuesta)
                 .orElse(null);
     }
 }

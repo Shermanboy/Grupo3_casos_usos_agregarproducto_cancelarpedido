@@ -12,12 +12,12 @@ public record CarritoResponse(
         BigDecimal subtotal
 ) {
 
-    public static CarritoResponse from(Carrito carrito) {
+    public static CarritoResponse construirRespuesta(Carrito carrito) {
         return new CarritoResponse(
                 carrito.getIdCarrito(),
                 carrito.getCliente() == null ? null : carrito.getCliente().getIdCliente(),
                 carrito.getDetalles().stream()
-                        .map(DetalleCarritoResponse::from)
+                        .map(DetalleCarritoResponse::construirRespuesta)
                         .toList(),
                 carrito.calcularSubtotal()
         );
