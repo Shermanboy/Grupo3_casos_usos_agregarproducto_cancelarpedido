@@ -20,28 +20,28 @@ public class PedidoService {
     @Autowired
     private ProductoRepository productoRepository;
 
-    @Transactional // Garantiza que si algo falla, no se guarde nada a medias
+    @Transactional 
     public boolean cancelarPedido(Long idPedido) {
-        Optional<Pedido> pedidoOpt = pedidoRepository.findById(idPedido);
+    Optional<Pedido> pedidoOpt = pedidoRepository.findById(idPedido);
         
         if (pedidoOpt.isPresent()) {
             Pedido pedido = pedidoOpt.get();
             
-            // Acá le preguntamos a la entidad si es válido cancelarla (tu modelo de dominio)
+            
             if (pedido.puedeCancelarse()) {
                 pedido.cancelar(); // Cambia el estado a "Cancelado"
                 
-                // Recorremos los detalles para devolver el stock al inventario
+           
                 for (DetallePedido detalle : pedido.getDetalles()) {
                     Producto producto = detalle.getProducto();
                     producto.sumarStock(detalle.getCantidad());
                     productoRepository.save(producto); // Actualizamos el stock en la DB
                 }
                 
-                pedidoRepository.save(pedido); // Actualizamos el estado del pedido en la DB
+              pedidoRepository.actualizarEstado(pedido.getIdPedido(), pedido.getEstado());
                 return true;
             }
         }
-        return false; // Retorna falso si no se puede cancelar o si no existe
+        return false; 
     }
 }

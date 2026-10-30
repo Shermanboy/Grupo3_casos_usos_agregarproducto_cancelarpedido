@@ -12,7 +12,7 @@ public class Pedido {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idPedido;
 
-    private String estado; // "Pendiente", "Aceptado", "Cancelado"
+    private String estado; 
     private Date fechaCreacion;
     private Double montoTotal;
 
@@ -35,7 +35,7 @@ public class Pedido {
         }
     }
 
-    // Getters y Setters
+    
     public Long getIdPedido() { return idPedido; }
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
