@@ -42,6 +42,6 @@ public class PedidoService {
                 return true;
             }
         }
-        return false; // Retorna falso si no se puede cancelar o si no existe
+        return false; 
     }
 }
